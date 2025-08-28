@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>RC Car Control</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- NippleJS Joystick Library -->
+  <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.9.0/dist/nipplejs.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f0f0f0;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .switch-container {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .switch-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 16px;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 60px;
+      height: 30px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: 0.4s;
+      border-radius: 30px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 22px;
+      width: 22px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: 0.4s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: #4caf50;
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(30px);
+    }
+
+    #joystick-wrapper {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      width: 200px;
+      height: 200px;
+      background-color: #ddd;
+      border-radius: 50%;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+    }
+
+    #status {
+      text-align: center;
+      margin-top: 20px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>RC Car Controller</h1>
+
+  <!-- Toggle Switches -->
+  <div class="switch-container">
+    <!-- Power -->
+    <label class="switch-label">Power
+      <label class="switch">
+        <input type="checkbox" id="powerToggle" />
+        <span class="slider"></span>
+      </label>
+    </label>
+
+    <!-- Gesture Mode -->
+    <label class="switch-label">Gesture
+      <label class="switch">
+        <input type="checkbox" id="gestureToggle" />
+        <span class="slider"></span>
+      </label>
+    </label>
+
+    <!-- Voice Mode -->
+    <label class="switch-label">Voice
+      <label class="switch">
+        <input type="checkbox" id="voiceToggle" />
+        <span class="slider"></span>
+      </label>
+    </label>
+
+    <!-- Remote Control -->
+    <label class="switch-label">Remote
+      <label class="switch">
+        <input type="checkbox" id="remoteToggle" checked />
+        <span class="slider"></span>
+      </label>
+    </label>
+
+    <!-- Wi-Fi Mode -->
+    <label class="switch-label">Wi-Fi
+      <label class="switch">
+        <input type="checkbox" id="wifiToggle" checked />
+        <span class="slider"></span>
+      </label>
+    </label>
+
+    <!-- Bluetooth Mode -->
+    <label class="switch-label">Bluetooth
+      <label class="switch">
+        <input type="checkbox" id="bluetoothToggle" />
+        <span class="slider"></span>
+      </label>
+    </label>
+  </div>
+
+  <!-- Joystick -->
+  <div id="joystick-wrapper"></div>
+
+  <!-- Status -->
+  <div id="status">Status: Waiting for input...</div>
+
+  <script>
+    // CHANGE THIS TO YOUR CAR'S IP ADDRESS FOR WIFI MODE
+    const carIP = 'http://192.168.4.1'; // Your ESP32/ESP8266 IP
+
+    // Flag for current communication mode
+    let isBluetoothMode = false;
+    let isWifiMode = true;
+
+    function sendCommand(cmd) {
+      if (!isWifiMode) {
+        console.log(`[Wi-Fi OFF] Command ignored over Wi-Fi: ${cmd}`);
+        return;
+      }
+
+      fetch(`${carIP}/${cmd}`)
+        .then((response) => {
+          if (!response.ok) throw new Error('Failed to send command');
+          console.log(`Command sent: ${cmd}`);
+        })
+        .catch((error) => {
+          console.error('Error sending command:', error);
+        });
+    }
+
+    // Power toggle
+    document.getElementById('powerToggle').addEventListener('change', function () {
+      const cmd = this.checked ? 'on' : 'off';
+      sendCommand(cmd);
+    });
+
+    // Modes toggles (Gesture, Voice, Remote)
+    const modeToggles = ['gestureToggle', 'voiceToggle', 'remoteToggle'];
+
+    modeToggles.forEach((id) => {
+      document.getElementById(id).addEventListener('change', function () {
+        if (this.checked) {
+          modeToggles.forEach((otherId) => {
+            if (otherId !== id) {
+              document.getElementById(otherId).checked = false;
+            }
+          });
+          sendCommand(id.replace('Toggle', '') + '_mode');
+        } else {
+          sendCommand(id.replace('Toggle', '') + '_off');
+        }
+      });
+    });
+
+    // Wi-Fi and Bluetooth toggles (mutually exclusive)
+    const wifiToggle = document.getElementById('wifiToggle');
+    const bluetoothToggle = document.getElementById('bluetoothToggle');
+
+    wifiToggle.addEventListener('change', function () {
+      if (this.checked) {
+        bluetoothToggle.checked = false;
+        isWifiMode = true;
+        isBluetoothMode = false;
+        sendCommand('wifi_mode');
+        sendCommand('bluetooth_off');
+      } else {
+        // If user turns off Wi-Fi mode, disable Wi-Fi flag
+        isWifiMode = false;
+        sendCommand('wifi_off');
+      }
+    });
+
+    bluetoothToggle.addEventListener('change', function () {
+      if (this.checked) {
+        wifiToggle.checked = false;
+        isBluetoothMode = true;
+        isWifiMode = false;
+        sendCommand('bluetooth_mode');
+        sendCommand('wifi_off');
+      } else {
+        isBluetoothMode = false;
+        sendCommand('bluetooth_off');
+      }
+    });
+
+    // Joystick setup
+    const joystick = nipplejs.create({
+      zone: document.getElementById('joystick-wrapper'),
+      mode: 'static',
+      position: { left: '50%', top: '50%' },
+      color: 'blue',
+      size: 150,
+    });
+
+    const status = document.getElementById('status');
+    let lastDirection = '';
+
+    joystick.on('dir', function (evt, data) {
+      if (data.direction && data.direction.angle !== lastDirection) {
+        lastDirection = data.direction.angle;
+        status.innerText = `Direction: ${lastDirection}`;
+        sendCommand(lastDirection);
+      }
+    });
+
+    joystick.on('end', function () {
+      lastDirection = '';
+      status.innerText = 'Direction: Stopped';
+      sendCommand('stop');
+    });
+  </script>
+</body>
+</html>
